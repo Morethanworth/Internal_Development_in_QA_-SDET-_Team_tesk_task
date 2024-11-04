@@ -10,17 +10,36 @@ def sync_folders(source, replica, log_file):
         relative_path = os.path.relpath(root, source)
         replica_root = os.path.join(replica, relative_path)
 
-        # make sure current path in replica
+        # Make sure current path in replica
         if not os.path.exists(replica_root):
             os.makedirs(replica_root)
 
-        # copy files
+        # Copy files
         for file in files:
             source_file = os.path.join(root, file)
             replica_file = os.path.join(replica_root, file)
 
             if not os.path.exists(replica_file) or not filecmp.cmp(source_file, replica_file, shallow=False):
                 shutil.copy2(source_file, replica_file)
+
+    # Remove files and directories not in source
+    for root, dirs, files in os.walk(replica, topdown=False):
+        relative_path = os.path.relpath(root, replica)
+        source_root = os.path.join(source, relative_path)
+
+        # remove directories
+        for dir in dirs:
+            replica_dir = os.path.join(root, dir)
+            source_dir = os.path.join(source_root, dir)
+            if not os.path.exists(source_dir):
+                shutil.rmtree(replica_dir)
+
+        # remove files
+        for file in files:
+            replica_file = os.path.join(root, file)
+            source_file = os.path.join(source_root, file)
+            if not os.path.exists(source_file):
+                os.remove(replica_file)
 def main():
     parser = argparse.ArgumentParser(description="Program that synchronizes two folders")
     parser.add_argument("-s", "--source", help="Path to the source folder")
