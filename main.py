@@ -3,26 +3,55 @@ import os
 import shutil
 import filecmp
 import time
+import logging
 
-def sync_folders(source, replica, log_file):
-    # Ensure all files and folders in the source are in the replica
+
+def setup_logger(log_file):
+    # if desired the file could be cleared first
+    # open(log_file, 'w').close()
+
+    logger = logging.getLogger("FolderSyncLogger")
+    logger.setLevel(logging.INFO)
+
+    file_handler = logging.FileHandler(log_file)
+    file_handler.setLevel(logging.INFO)
+
+    # console logger
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
+
+    # logging format
+    formatter = logging.Formatter('%(asctime)s -- %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+    file_handler.setFormatter(formatter)
+    console_handler.setFormatter(formatter)
+
+    logger.addHandler(file_handler)
+    logger.addHandler(console_handler)
+
+    return logger
+
+
+def sync_folders(source, replica, logger):
+    # ensure all files and folders in the source are in the replica
     for root, dirs, files in os.walk(source):
         relative_path = os.path.relpath(root, source)
         replica_root = os.path.join(replica, relative_path)
 
-        # Make sure current path in replica
+        # make sure current path in replica
         if not os.path.exists(replica_root):
             os.makedirs(replica_root)
+            # logger.info(f"Directory created: {replica_root}")
 
-        # Copy files
+        # copy files
         for file in files:
             source_file = os.path.join(root, file)
             replica_file = os.path.join(replica_root, file)
 
             if not os.path.exists(replica_file) or not filecmp.cmp(source_file, replica_file, shallow=False):
                 shutil.copy2(source_file, replica_file)
+                logger.info(f"File copied: {source_file} to {replica_file}")
 
-    # Remove files and directories not in source
+    # remove files and directories not in source
     for root, dirs, files in os.walk(replica, topdown=False):
         relative_path = os.path.relpath(root, replica)
         source_root = os.path.join(source, relative_path)
@@ -33,6 +62,7 @@ def sync_folders(source, replica, log_file):
             source_dir = os.path.join(source_root, dir)
             if not os.path.exists(source_dir):
                 shutil.rmtree(replica_dir)
+                # logger.info(f"Directory removed: {replica_dir}")
 
         # remove files
         for file in files:
@@ -40,6 +70,9 @@ def sync_folders(source, replica, log_file):
             source_file = os.path.join(source_root, file)
             if not os.path.exists(source_file):
                 os.remove(replica_file)
+                logger.info(f"File removed: {replica_file}")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Program that synchronizes two folders")
     parser.add_argument("-s", "--source", help="Path to the source folder")
@@ -48,20 +81,26 @@ def main():
     parser.add_argument("-l", "--log_file", help="Path to the log file")
 
     args = parser.parse_args()
-    # Check if the source folder exists
+    # check if the source folder exists
     if not os.path.exists(args.source):
         print(f"Error: Source folder '{args.source}' does not exist.")
         return
 
-    # Check if the replica folder exists
+    # check if the replica folder exists
     if not os.path.exists(args.replica):
         print(f"Error: Source replica '{args.replica}' does not exist.")
         return
 
+    if not os.path.exists(args.log_file) or not args.log_file:
+        print(f"Error: Logging file doesnt exist or not provided.")
+        return
+
+    # setup logger
+    logger = setup_logger(args.log_file)
     while True:
-        print("Synchronizing folders...")
-        sync_folders(args.source, args.replica, args.log_file)
-        print("Synchronization finished...")
+        logger.info("Starting synchronization")
+        sync_folders(args.source, args.replica, logger)
+        logger.info("Synchronization complete")
         time.sleep(args.interval)
 
 
